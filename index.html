@@ -1,0 +1,784 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Schoenstatt Santa Cruz</title>
+  <meta name="description" content="Schoenstatt Santa Cruz - Noticias, eventos y recursos locales." />
+  <!-- Tailwind CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Firebase compat (Realtime DB) -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+
+  <style>
+    :root { --accent:#6b3fb5; --muted:#6b7280; --glass: rgba(255,255,255,0.92); }
+    html,body { height:100%; margin:0; font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial, "Noto Sans"; }
+    body {
+      background:
+        linear-gradient(90deg, rgba(255,255,255,0.92), rgba(255,255,255,0.92)),
+        url('images/fondo-santuario.jpg') center/cover no-repeat fixed;
+      -webkit-font-smoothing:antialiased;
+      -moz-osx-font-smoothing:grayscale;
+      color:#0f1724;
+    }
+
+    header { background: var(--glass); position: sticky; top:0; z-index:40; backdrop-filter: blur(6px); border-bottom: 1px solid rgba(15,23,36,0.04); }
+    .card { background: #fff; border-radius:12px; padding:18px; box-shadow: 0 10px 30px rgba(2,6,23,0.06); }
+    .primarias { display:grid; grid-template-columns: repeat(3,1fr); gap:18px; margin-bottom:22px; }
+    .primarias .img-wrap { height:220px; overflow:hidden; border-radius:12px; box-shadow: 0 8px 22px rgba(2,6,23,0.06); }
+    .primarias img { width:100%; height:100%; object-fit:cover; display:block; }
+    .galeria-grid { display:grid; grid-template-columns: repeat(4,1fr); gap:16px; margin-top:12px; }
+    .galeria-grid img { width:100%; height:200px; object-fit:cover; border-radius:10px; cursor:pointer; transition: transform .28s ease; }
+    .map-embed { border-radius:10px; overflow:hidden; box-shadow:0 10px 30px rgba(2,6,23,0.06); }
+    .events-grid { display:grid; gap:14px; }
+    .event-card { display:flex; gap:16px; align-items:flex-start; padding:16px; border-radius:10px; background:#fff; box-shadow:0 8px 22px rgba(2,6,23,0.04); }
+    .event-img { width:220px; height:140px; object-fit:cover; border-radius:8px; }
+    .btn { background:var(--accent); color:white; padding:8px 12px; border-radius:8px; font-weight:700; border:none; cursor:pointer; }
+    .btn-secondary { background:transparent; border:1px solid rgba(107,63,181,0.12); color:var(--accent); padding:8px 10px; border-radius:8px; cursor:pointer; }
+    .small-muted { color:var(--muted); font-size:0.95rem; }
+    footer p { color: rgba(15,23,36,0.7); }
+    @media (max-width:980px){ .primarias{ grid-template-columns:repeat(2,1fr);} .galeria-grid{ grid-template-columns: repeat(2,1fr);} .event-img{width:160px;height:110px;} }
+    @media (max-width:560px){ .primarias{ grid-template-columns:1fr;} .galeria-grid{ grid-template-columns:1fr;} .event-card{flex-direction:column} .event-img{width:100%; height:220px} }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="container mx-auto max-w-5xl flex items-center justify-between py-4 px-4">
+      <div class="flex items-center gap-3">
+        <img src="images/logo-schoenstatt.png" alt="Logo" style="height:46px" onerror="this.style.display='none'">
+        <h1 class="text-2xl font-semibold">Schoenstatt Santa Cruz</h1>
+      </div>
+      <nav class="text-sm hidden md:flex items-center gap-3">
+        <a href="?page=home" class="hover:underline">Inicio</a>
+        <a href="?page=eventos" class="hover:underline">Eventos</a>
+        <a href="?page=juventud-masculina" class="hover:underline">Juventud Masculina</a>
+        <a href="?page=juventud-femenina" class="hover:underline">Juventud Femenina</a>
+        <a href="?page=capitales-de-gracia" class="hover:underline">Capitales de Gracia</a>
+      </nav>
+      <div class="md:hidden">
+        <button id="menuToggle" class="btn-secondary">Menú</button>
+      </div>
+    </div>
+
+    <div id="mobileMenu" class="hidden border-t border-gray-100">
+      <div class="max-w-5xl mx-auto px-4 py-3 flex flex-col gap-2">
+        <a href="?page=home" class="text-sm">Inicio</a>
+        <a href="?page=eventos" class="text-sm">Eventos</a>
+        <a href="?page=juventud-masculina" class="text-sm">Juventud Masculina</a>
+        <a href="?page=juventud-femenina" class="text-sm">Juventud Femenina</a>
+        <a href="?page=capitales-de-gracia" class="text-sm">Capitales de Gracia</a>
+      </div>
+    </div>
+  </header>
+
+  <main class="container mx-auto max-w-5xl px-4 py-8" id="content"></main>
+
+  <footer class="container mx-auto max-w-5xl px-4 py-8">
+    <p class="text-sm">© Schoenstatt Santa Cruz • Hecho con cariño</p>
+  </footer>
+
+<script>
+/* IMÁGENES */
+const IMAGES = {
+  fondo: 'images/fondo-santuario.jpg',
+  quienes_1: 'images/santuario-noche.jpeg',
+  quienes_2: 'images/shchoenstatt-flores.jpeg',
+  quienes_3: 'images/santuario-amanecer.jpeg',
+  gal1: 'images/foto-comunidad-1.jpg',
+  gal2: 'images/foto-comunidad-2.jpg',
+  gal3: 'images/foto-comunidad-3.jpeg',
+  foto4: 'images/foto-comunidad-4.jpeg',
+  asilo: 'images/asilo-ancianos.jpeg',
+  ev1: 'images/eventos-diciembre1.jpeg',
+  ev2: 'images/eventos-diciembre2.jpeg',
+  ev3: 'images/eventos-diciembre3.jpeg',
+  evento4: 'images/evento-4.jpeg',
+  kentenich: 'images/Kentenich_sonrisa.jpg',
+  jm1: 'images/juventud-masculina-schoenstatt.jpeg',
+  logo: 'images/logo-schoenstatt.png',
+  jmcamp: 'images/schoenstatt-campamentos.jpeg',
+  jm5: 'images/juventudmasculina5.jpeg',
+  jm: 'images/jm-santuario.jpeg',
+  jf: 'images/juventud-femenina-schoenstatt.jpeg',
+  jf1: 'images/jf3.jpeg',
+  jf2: 'images/jf4.jpeg',
+  jf6: 'images/jf6.jpeg',
+};
+
+/* FIREBASE */
+const firebaseConfig = {
+  apiKey: "AIzaSyDkrfIVq-VVi_sAYl6tH3CNKcxp_jC8k9E",
+  authDomain: "juventud-schoenstatt.firebaseapp.com",
+  databaseURL: "https://juventud-schoenstatt-default-rtdb.firebaseio.com",
+  projectId: "juventud-schoenstatt",
+  storageBucket: "juventud-schoenstatt.firebasestorage.app",
+  messagingSenderId: "725535188166",
+  appId: "1:725535188166:web:c3031d48f76a7361bf23c7",
+  measurementId: "G-QH28V7LTLC"
+};
+try { if (!firebase.apps || !firebase.apps.length) firebase.initializeApp(firebaseConfig); } catch(e){ console.warn('Firebase init:', e); }
+const db = (window.firebase && firebase.database) ? firebase.database() : null;
+
+/* Router */
+function pageFromUrl(){ return (new URLSearchParams(location.search).get('page') || 'home').toLowerCase(); }
+
+/* HOME (user-supplied content exactly) */
+function renderHome(){
+  return `
+  <section>
+    <h2 class="text-3xl font-bold mb-4">Quiénes somos</h2>
+    <p class="mb-6">Somos la comunidad del Movimiento de Schoenstatt en Santa Cruz de la Sierra (Bolivia). Nuestro santuario “Jenecherú — Fuego Vivo de Esperanza” es un lugar de oración, formación y misión. Nos reunimos para la Eucaristía dominical, celebraciones de la Alianza, retiros, voluntariado y encuentros juveniles. Te invitamos a participar y seguir nuestras actividades.</p>
+
+    <!-- Fotos principales -->
+    <div class="primarias mb-6">
+      <div class="img-wrap"><img src="${IMAGES.quienes_1}" alt="Santuario noche"></div>
+      <div class="img-wrap"><img src="${IMAGES.quienes_2}" alt="Santuario flores"></div>
+      <div class="img-wrap"><img src="${IMAGES.quienes_3}" alt="Santuario amanecer"></div>
+    </div>
+
+    <!-- Próximos eventos -->
+    <h3 class="text-2xl font-semibold mt-8 mb-4">Próximos eventos</h3>
+    <div class="grid sm:grid-cols-2 gap-4 mb-6">
+      <!-- Visita al Asilo -->
+      <div class="card">
+        <div class="flex gap-4 items-start">
+          <img src="${IMAGES.asilo}" alt="Asilo" class="w-40 h-32 object-cover rounded">
+          <div>
+            <h4 class="font-bold text-lg">Visita al Asilo de Ancianos</h4>
+            <p class="small-muted"><strong>Fecha:</strong> Domingo 02 de noviembre</p>
+            <p class="small-muted"><strong>Hora:</strong> 7:30 am — 10:00 am</p>
+            <p class="mt-2 text-sm">Iniciamos con la misa y luego preparamos el desayuno para los abuelos. Actividad de servicio — todos invitados.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Talita Kum -->
+      <div class="card">
+        <div class="flex gap-4 items-start">
+          <img src="${IMAGES.ev1}" alt="Talita Kum" class="w-40 h-32 object-cover rounded">
+          <div>
+            <h4 class="font-bold text-lg">Talita Kum — Vigilia Juvenil</h4>
+            <p class="small-muted"><strong>Fecha:</strong> Sáb 29/11 — Dom 30/11</p>
+            <p class="small-muted"><strong>Lugar:</strong> Santuario de Schoenstatt</p>
+            <p class="small-muted"><strong>Dirigido a:</strong> 13–18 años (Juventud Femenina)</p>
+            <p class="small-muted"><strong>Ofrenda:</strong> 150 Bs</p>
+            <p class="mt-2 text-sm">Encuentro para renovar el corazón y crecer en la verdad. <a href="https://forms.gle/qWqRb6p6wUJprrMy6" target="_blank" class="text-blue-600 underline">Inscripciones aquí</a>.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Diseñados para Amar -->
+      <div class="card">
+        <div class="flex gap-4 items-start">
+          <img src="${IMAGES.ev2}" alt="Diseñados para Amar" class="w-40 h-32 object-cover rounded">
+          <div>
+            <h4 class="font-bold text-lg">Jornada: "Diseñados para Amar"</h4>
+            <p class="small-muted"><strong>Fecha:</strong> Sábado 29 de noviembre</p>
+            <p class="small-muted"><strong>Hora:</strong> 08:00 — 12:30</p>
+            <p class="small-muted"><strong>Lugar:</strong> Santuario de Schoenstatt</p>
+            <p class="mt-2 text-sm">Talleres pro-vida y formación. <a href="https://forms.gle/ZR8d5NY2RNYoKhTE8" target="_blank" class="text-blue-600 underline">Link de inscripción</a>.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Feria Navideña -->
+      <div class="card">
+        <div class="flex gap-4 items-start">
+          <img src="${IMAGES.ev3}" alt="Feria Navideña" class="w-40 h-32 object-cover rounded">
+          <div>
+            <h4 class="font-bold text-lg">1ª Feria Navideña de Schoenstatt</h4>
+            <p class="small-muted"><strong>Fecha:</strong> Domingo 7 de diciembre</p>
+            <p class="small-muted"><strong>Hora:</strong> 09:30 — 14:30</p>
+            <p class="mt-2 text-sm">Mercado navideño solidario. Registra tu grupo para participar (contacto en redes).</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Galería -->
+    <h3 class="text-2xl font-semibold mt-8 mb-2">Galería</h3>
+    <p class="text-sm mb-4">Haz clic en cualquier imagen para ver en tamaño completo.</p>
+    <div class="galeria-grid mb-8">
+      <img src="${IMAGES.gal1}" alt="Galería 1" onclick="window.open(this.src,'_blank')" />
+      <img src="${IMAGES.gal2}" alt="Galería 2" onclick="window.open(this.src,'_blank')" />
+      <img src="${IMAGES.gal3}" alt="Galería 3" onclick="window.open(this.src,'_blank')" />
+      <img src="${IMAGES.foto4}" alt="Galería 4" onclick="window.open(this.src,'_blank')" />
+    </div>
+
+    <!-- Mapa -->
+    <h3 class="text-2xl font-semibold mt-6 mb-4">Dónde estamos</h3>
+    <p class="mb-3">Santa Cruz de la Sierra, Bolivia — Santuario de Schoenstatt - Jenecherú (ver mapa abajo)</p>
+    <div class="map-embed mb-8">
+      <iframe src="https://www.google.com/maps?q=-17.7916526,-63.2386461&z=17&output=embed" width="100%" height="420" style="border:0;" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
+    </div>
+
+    <!-- Contacto -->
+    <h3 class="text-2xl font-semibold mt-6 mb-4">Contacto</h3>
+    <form id="contactForm" class="grid gap-3 max-w-md bg-white p-4 rounded shadow">
+      <input id="name" type="text" placeholder="Tu nombre" class="border p-2 rounded" required/>
+      <input id="phone" type="tel" placeholder="Número de celular" class="border p-2 rounded" required pattern="[0-9+\\-\\s]{7,}"/>
+      <textarea id="message" placeholder="Mensaje (¿cómo podemos ayudarte?)" class="border p-2 rounded" rows="4" required></textarea>
+      <div class="flex gap-2">
+        <button type="submit" class="btn">Enviar</button>
+        <button type="reset" class="btn-secondary">Limpiar</button>
+      </div>
+      <p id="formMsg" class="text-sm text-green-600 hidden">Mensaje enviado. ¡Gracias!</p>
+    </form>
+  </section>
+  `;
+}
+
+/* EVENTOS page */
+function renderEventosPage(){
+  return `
+    <section>
+      <h2 class="text-3xl font-bold mb-4">Eventos</h2>
+      <p class="small-muted mb-6">Listado de eventos y enlaces de inscripción</p>
+      <div class="events-grid grid gap-4">
+        ${renderEventCard(IMAGES.asilo,'Visita al Asilo de Ancianos','Dom 07 dic','7:30 - 10:00','Iniciamos con misa y desayuno para los abuelos.','')}
+        ${renderEventCard(IMAGES.ev1,'Talita Kum — Vigilia Juvenil','29–30 nov (empieza el sabado 29)','15:00','Vigilia para jóvenes (13–18 años). Ofrenda 150 Bs.','https://forms.gle/qWqRb6p6wUJprrMy6')}
+        ${renderEventCard(IMAGES.ev2,'Diseñados para Amar','29 nov','08:00 - 12:30','Jornada de talleres pro-vida y formación.','https://forms.gle/ZR8d5NY2RNYoKhTE8')}
+        ${renderEventCard(IMAGES.ev3,'1ª Feria Navideña de Schoenstatt','7 dic','09:30 - 14:30','Mercado navideño solidario, inscripción de stands abierta.','')}
+      </div>
+    </section>
+  `;
+}
+function renderEventCard(img,title,date,time,desc,link){
+  return `
+    <article class="event-card card">
+      <img src="${img}" alt="${title}" class="event-img" />
+      <div>
+        <h4 class="font-bold text-lg">${title}</h4>
+        <p class="small-muted"><strong>Fecha:</strong> ${date}</p>
+        <p class="small-muted"><strong>Hora:</strong> ${time}</p>
+        <p class="mt-2 text-sm">${desc}</p>
+        ${link ? `<p class="mt-2"><a href="${link}" target="_blank" class="text-blue-600 underline">Inscribirse</a></p>` : ''}
+      </div>
+    </article>
+  `;
+}
+
+/* JUVENTUD MASCULINA (sección mejorada mantenida) */
+function renderJuventudMasculina(){
+  const ciudad = 'Santa Cruz de la Sierra, Bolivia';
+  const edadRango = '9 – 30 años (divisiones por edades según el grupo local)';
+  const whatsappLink = 'https://wa.me/59172155808';
+  const contactoNombre = 'Luis Descarpontriez';
+  const contactoNumero = '+591 72155808';
+
+  return `
+    <section>
+      <div class="card mb-6">
+        <div class="md:flex md:items-center md:gap-6">
+          <div class="md:w-1/3">
+            <img src="${IMAGES.jm1}" alt="Juventud Masculina - Schoenstatt" class="rounded-lg shadow-md object-cover w-full" style="height:320px;">
+          </div>
+          <div class="flex-1 mt-4 md:mt-0">
+            <div class="pill">Juventud Masculina</div>
+            <h2 class="text-2xl font-bold mb-2">Ardor por la misión, formación y fraternidad</h2>
+            <p class="text-sm mb-3">La Juventud Masculina acompaña a niños y jóvenes en su crecimiento humano y espiritual. Aquí formamos líderes, cultivamos la amistad con Cristo y promovemos el servicio con proyectos concretos en la comunidad.</p>
+            <div class="grid sm:grid-cols-2 gap-3 mt-3">
+              <div class="p-3 rounded bg-gray-50">
+                <div class="text-sm text-gray-600">Rango de edad</div>
+                <div class="font-semibold">${edadRango}</div>
+              </div>
+              <div class="p-3 rounded bg-gray-50">
+                <div class="text-sm text-gray-600">Actividades</div>
+                <ul class="text-sm mt-1 list-disc ml-5">
+                  <li>Campamentos y excursiones</li>
+                  <li>Encuentros formativos y retiros</li>
+                  <li>Proyectos de servicio</li>
+                  <li>Deportes y dinámicas en equipo</li>
+                </ul>
+              </div>
+            </div>
+            <div class="mt-4 flex gap-3">
+              <a href="${whatsappLink}" target="_blank" class="btn">Unirme (WhatsApp)</a>
+              <button class="btn-secondary" onclick="alert('Contacto: ${contactoNombre} — ${contactoNumero}')">Ver contacto</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card mb-6">
+        <h3 class="text-2xl font-semibold mb-3">Dos caminos formativos</h3>
+        <div class="grid sm:grid-cols-2 gap-4">
+          <div class="p-4 border rounded-lg">
+            <h4 class="font-semibold text-lg mb-2">Pioneros <span class="text-sm small-muted">10–13 años aproxim.</span></h4>
+            <p class="text-sm text-gray-700 mb-2">Primera etapa formativa: energía, descubrimiento y hábitos de comunidad. Se trabaja la amistad, responsabilidad y relación con la oración desde lo cotidiano.</p>
+            <ul class="list-disc ml-5 text-sm text-gray-700 space-y-1">
+              <li>Objetivo: descubrir el bien pequeño con alegría.</li>
+              <li>Actividades: juegos, dinámicas, excursiones básicas y celebraciones.</li>
+              <li>Formación: valores, trabajo en equipo y servicio inicial.</li>
+            </ul>
+          </div>
+
+          <div class="p-4 border rounded-lg">
+            <h4 class="font-semibold text-lg mb-2">Cruzados <span class="text-sm small-muted">14–17 años aproxim.</span></h4>
+            <p class="text-sm text-gray-700 mb-2">Etapa de compromiso: formación más profunda, liderazgo y misión. Se prepara para roles de servicio en la comunidad y misiones.</p>
+            <ul class="list-disc ml-5 text-sm text-gray-700 space-y-1">
+              <li>Objetivo: formar líderes con espíritu de servicio.</li>
+              <li>Actividades: campamentos exigentes, misiones, formación doctrinal y apostólica.</li>
+              <li>Responsabilidad: coordinación de pequeñas acciones comunitarias.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <div class="card mb-6">
+        <h3 class="text-2xl font-semibold mb-3">Fotos de actividades</h3>
+        <div class="grid sm:grid-cols-3 gap-3">
+          <img src="${IMAGES.jm}" alt="Juventud Masculina 1" class="rounded-md object-cover" style="height:240px; width:100%; cursor:pointer" onclick="window.open(this.src,'_blank')">
+          <img src="${IMAGES.jmcamp}" alt="Juventud Masculina 2" class="rounded-md object-cover" style="height:240px; width:100%; cursor:pointer" onclick="window.open(this.src,'_blank')">
+          <img src="${IMAGES.jm5}" alt="Juventud Masculina 3" class="rounded-md object-cover" style="height:240px; width:100%; cursor:pointer" onclick="window.open(this.src,'_blank')">
+        </div>
+      </div>
+
+      <div class="card mb-6">
+        <div class="md:flex md:items-center md:justify-between md:gap-6">
+          <div>
+            <h3 class="text-2xl font-semibold mb-1">Contactos - Schoenstatt Santa Cruz</h3>
+            <p class="text-sm small-muted mb-2">Para unirte, coordinar actividades o consultas:</p>
+            <ul class="list-disc ml-6 text-sm mb-3">
+              <li>Coordinador local: <strong>${contactoNombre}</strong></li>
+              <li>Teléfono / WhatsApp: <strong>${contactoNumero}</strong></li>
+            </ul>
+            <div class="flex gap-3">
+              <a href="${whatsappLink}" target="_blank" class="btn">Enviar mensaje</a>
+              <a href="tel:${contactoNumero.replace(/\s+/g,'')}" class="btn-secondary">Llamar</a>
+            </div>
+          </div>
+
+          <div class="mt-4 md:mt-0 md:w-1/3">
+            <div class="p-4 rounded-lg bg-gradient-to-br from-white to-indigo-50 border">
+              <div class="text-sm small-muted">Próximo encuentro</div>
+              <div class="font-bold text-lg">Reunión de líderes - Sáb 29/11</div>
+              <p class="text-sm small-muted mt-2">Reunion Juventud Masculina. ¡Ven y participa!</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </section>
+  `;
+}
+
+/* JUVENTUD FEMENINA */
+function renderJuventudFemenina(){
+  const ciudad = 'Santa Cruz de la Sierra, Bolivia';
+  // WhatsApp con código de país (para wa.me)
+  const whatsappLink = 'https://wa.me/59177805322';
+  const instagramLink = 'https://www.instagram.com/jf.santacruzdelasierra?utm_source=ig_web_button_share_sheet&igsh=ZDNlZDc0MzIxNw==';
+  const contactoNombre = 'Michelle Vasquez';
+  const contactoNumero = '+591 77805322';
+
+  // Datos del próximo encuentro (fácil de actualizar)
+  const nextTitle = 'Vigilia Talita Kum — Sab 29/11';
+  const nextSub = 'Próximo encuentro';
+  const nextDesc = 'Jornada de oración, música y formación para jóvenes. ¡Todas están invitadas a participar!';
+
+  return `
+    <section>
+
+      <!-- Hero / presentación -->
+      <div class="card mb-6">
+        <div class="md:flex md:items-center md:gap-6">
+          
+          <!-- Imagen principal -->
+          <div class="md:w-1/3">
+            <img src="${IMAGES.jf1}" 
+                 alt="Juventud Femenina Schoenstatt" 
+                 class="rounded-lg shadow-md object-cover w-full" 
+                 style="height:320px;">
+          </div>
+
+          <!-- Texto -->
+          <div class="flex-1 mt-4 md:mt-0">
+            <span class="pill">Juventud Femenina</span>
+
+            <!-- Lema -->
+            <div class="mt-3 mb-4 p-3 rounded-lg bg-gradient-to-r from-pink-100 to-purple-100 text-center shadow-sm">
+              <p class="font-semibold text-purple-800 mb-1">“Nada sin Ti, nada sin nosotras”</p>
+              <p class="text-sm text-purple-700">Auténticas • Libres • Profundas • Luminosas</p>
+            </div>
+
+            <h2 class="text-2xl font-bold mb-2">Jóvenes auténticas, libres, profundas y luminosas</h2>
+
+            <p class="text-sm mb-3">
+              La <strong>Juventud Femenina de Schoenstatt</strong> es un movimiento de jóvenes mujeres 
+              que buscan cultivar una personalidad auténtica, arraigada en Dios, libre para amar 
+              y servir, y comprometida con transformar el mundo desde su originalidad femenina.
+            </p>
+
+            <p class="text-sm mb-3">
+              Inspiradas por la Santísima Virgen como <strong>Mujer Ideal</strong>, las jóvenes encuentran un 
+              espacio para crecer en amistad, liderazgo, proyectos apostólicos, acompañamiento y 
+              vida interior.
+            </p>
+
+            <div class="mt-4 flex gap-3 items-center">
+              <a href="${whatsappLink}" target="_blank" class="btn">Unirme (WhatsApp)</a>
+
+              <!-- Instagram button (pink gradient) -->
+              <a href="${instagramLink}" target="_blank" class="btn flex items-center gap-2" style="background:linear-gradient(90deg,#ec4899,#a78bfa);">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="white" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M7.001 2C4.239 2 2 4.239 2 7.001v9.998C2 19.761 4.239 22 7.001 22h9.998C19.761 22 22 19.761 22 17V7c0-2.761-2.239-5-5.001-5H7.001zM12 7c2.757 0 5 2.243 5 5s-2.243 5-5 5a5 5 0 1 1 0-10zm6.5-2a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3z"/>
+                </svg>
+                Instagram JF
+              </a>
+
+              <button class="btn-secondary" onclick="alert('Contacto: ${contactoNombre} — ${contactoNumero}')">
+                Ver contacto
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+
+      <!-- Identidad y misión -->
+      <div class="card mb-6">
+        <h3 class="text-2xl font-semibold mb-3">Nuestra misión: Ser reflejo vivo de María</h3>
+
+        <p class="text-sm mb-4">
+          La Juventud Femenina acompaña a niñas, adolescentes y jóvenes en un camino de crecimiento 
+          humano y espiritual para formar mujeres fuertes, profundas, libres y con una misión.
+        </p>
+
+        <div class="grid sm:grid-cols-2 gap-4">
+          
+          <div class="p-4 border rounded-lg">
+            <h4 class="font-semibold text-lg mb-2">Apostolado y servicio</h4>
+            <p class="text-sm text-gray-700 mb-2">
+              Proyectos pastorales, misiones y obras sociales donde las jóvenes expresan su espíritu 
+              alegre, solidario y comprometido.
+            </p>
+            <ul class="list-disc ml-6 text-sm text-gray-700 space-y-1">
+              <li>Misiones juveniles</li>
+              <li>Voluntariados</li>
+              <li>Jornadas y encuentros formativos</li>
+              <li>Actividades en el Santuario</li>
+            </ul>
+          </div>
+
+          <div class="p-4 border rounded-lg">
+            <h4 class="font-semibold text-lg mb-2">Vida interior y formación</h4>
+            <p class="text-sm text-gray-700 mb-2">
+              Los encuentros buscan fortalecer la identidad personal y espiritual de cada joven 
+              a la luz de la pedagogía del P. Kentenich.
+            </p>
+            <ul class="list-disc ml-6 text-sm text-gray-700 space-y-1">
+              <li>Retiros y profundizaciones</li>
+              <li>Dirección espiritual</li>
+              <li>Formación en valores y liderazgo</li>
+              <li>Crecimiento humano y emocional</li>
+            </ul>
+          </div>
+
+        </div>
+      </div>
+
+
+      <!-- Camino formativo -->
+      <div class="card mb-6">
+        <h3 class="text-2xl font-semibold mb-3">Camino formativo</h3>
+
+        <div class="grid sm:grid-cols-2 gap-4">
+
+          <div class="p-4 border rounded-lg">
+            <h4 class="font-semibold text-lg">Pre-Aliadas <span class="text-sm small-muted">(10–13 años)</span></h4>
+            <p class="text-sm text-gray-700 mt-2">
+              Niñas que aprenden a ser amigas de María y a descubrir su originalidad femenina a través de 
+              juegos, formación simple y actividades recreativas.
+            </p>
+          </div>
+
+          <div class="p-4 border rounded-lg">
+            <h4 class="font-semibold text-lg">Aliadas <span class="text-sm small-muted">(14–17 años)</span></h4>
+            <p class="text-sm text-gray-700 mt-2">
+              Jóvenes que profundizan en su identidad, liderazgo, vida espiritual y vivencia de la Alianza de Amor.
+            </p>
+          </div>
+
+        </div>
+      </div>
+
+
+      <!-- Galería -->
+      <div class="card mb-6">
+        <h3 class="text-2xl font-semibold mb-3">Galería de actividades</h3>
+        <p class="text-sm small-muted mb-3">Algunos momentos de encuentros, misiones y retiros.</p>
+
+        <div class="grid sm:grid-cols-3 gap-3">
+          <img src="${IMAGES.jf6}" class="rounded-md object-cover" style="height:240px;width:100%;" onclick="window.open(this.src,'_blank')" alt="jf1">
+          <img src="${IMAGES.jf2}" class="rounded-md object-cover" style="height:240px;width:100%;" onclick="window.open(this.src,'_blank')" alt="jf2">
+          <img src="${IMAGES.jf}"  class="rounded-md object-cover hidden sm:block" style="height:240px;width:100%;" onclick="window.open(this.src,'_blank')" alt="jf-large">
+        </div>
+      </div>
+
+
+      <!-- CONTACTOS + PRÓXIMO ENCUENTRO (misma fila: izquierda contactos, derecha tarjeta evento) -->
+      <div class="card mb-8">
+        <div class="md:flex md:items-start md:gap-6">
+
+          <!-- IZQUIERDA: contactos y CTA -->
+          <div class="md:flex-1">
+            <h3 class="text-2xl font-semibold mb-2">Contactos - Schoenstatt Santa Cruz</h3>
+            <p class="text-sm small-muted mb-3">Para unirte, coordinar actividades o consultas:</p>
+
+            <ul class="list-disc ml-6 text-sm mb-3">
+              <li>Coordinadora local: <strong>${contactoNombre}</strong></li>
+              <li>WhatsApp: <strong>${contactoNumero}</strong></li>
+            </ul>
+
+            <div class="flex gap-3">
+              <a href="${whatsappLink}" target="_blank" class="btn">Enviar mensaje</a>
+              <a href="${instagramLink}" target="_blank" class="btn-secondary" style="border-color:transparent; background:linear-gradient(90deg,#fce7f3,#f3e8ff); color:#7c2d86;">
+                Ver Instagram
+              </a>
+              <a href="tel:${contactoNumero.replace(/\s+/g,'')}" class="btn-secondary">Llamar</a>
+            </div>
+          </div>
+
+          <!-- DERECHA: tarjeta "Próximo encuentro" -->
+          <div class="mt-4 md:mt-0 md:w-80">
+            <div class="p-4 rounded-lg bg-gradient-to-br from-white to-indigo-50 border" style="box-shadow:0 8px 20px rgba(11,15,35,0.04);">
+              <div class="text-sm small-muted">${nextSub}</div>
+              <div class="font-bold text-lg mt-1">${nextTitle}</div>
+              <p class="text-sm small-muted mt-2">${nextDesc}</p>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+    </section>
+  `;
+}
+
+
+
+
+/* CAPITALS */
+/* CAPITALS */
+function renderCapitales(){
+  return `
+    <section class="space-y-8">
+
+      <!-- Sección principal -->
+      <div class="card p-6">
+        <h2 class="text-3xl font-bold mb-4">Capitales de Gracia</h2>
+
+        <p class="mb-4 small-muted">
+          Cada clic es una ofrenda de corazón: una oración, un deseo o un pequeño compromiso por la conquista de la imagen del padre Jose Kentenitch.
+           Puedes dejar además una nota opcional para expresar tu intención.
+        </p>
+
+        <div class="flex flex-col md:flex-row md:items-center gap-6">
+
+          <!-- Contador -->
+          <div>
+            <div class="text-sm text-gray-600">Total de Capitales de Gracia ofrecidos</div>
+            <div id="globalCount"
+              style="
+                font-size:48px;
+                font-weight:900;
+                color:var(--accent);
+                padding:14px 22px;
+                background:linear-gradient(90deg,#fff,#f6efff);
+                border-radius:12px;
+                box-shadow:0 6px 18px rgba(2,6,23,0.05);
+                display:inline-block;">
+              0
+            </div>
+            <div class="text-sm small-muted mt-2">Gracias por tu entrega.</div>
+          </div>
+
+          <!-- Botones -->
+          <div class="flex gap-3 md:ml-auto">
+            <button id="quickOffer" class="btn">Ofrecer +1</button>
+            <button id="openOfferModal" class="btn-secondary">Ofrecer un Capital</button>
+          </div>
+
+        </div>
+      </div>
+
+
+      <!-- Tarjeta Padre Kentenich -->
+      <div class="card p-6 md:flex items-center gap-6">
+
+        <!-- Imagen -->
+        <div class="md:w-1/3">
+          <img src="${IMAGES.kentenich}"
+               alt="Padre José Kentenich"
+               class="rounded-lg shadow-lg w-full object-cover"
+               style="height:300px;">
+        </div>
+
+        <!-- Texto -->
+        <div class="flex-1 mt-4 md:mt-0">
+          <h3 class="text-2xl font-bold mb-2">“Nada sin ti, nada sin nosotros”</h3>
+          <p class="text-sm small-muted mb-3">
+            El Padre José Kentenich nos enseñó que la transformación interior y la renovación 
+            del mundo necesitan un intercambio de amor: nosotros ofrecemos, y la Mater educa 
+            y bendice abundantemente. Cada capital de gracia es una semilla que, entregada con 
+            amor, se convierte en vida para muchos.
+          </p>
+
+          <ul class="list-disc ml-6 text-sm text-gray-700 space-y-1">
+            <li>Ofrenda de oraciones en silencio</li>
+            <li>Pequeños sacrificios por amor</li>
+            <li>Servicio a los demás sin esperar recompensa</li>
+            <li>Actos de paciencia, renuncia o entrega</li>
+            <li>Momentos difíciles llevados con fe y alegría</li>
+          </ul>
+
+          <p class="mt-4 small-muted italic">
+            “Tus aportes, incluso los más pequeños, son piedras vivas en la construcción del Reino de Dios.”
+          </p>
+        </div>
+
+      </div>
+
+
+      <!-- ¿Qué es un Capital de Gracia? -->
+      <div class="card p-6">
+        <h3 class="text-2xl font-bold mb-3">¿Qué es un Capital de Gracia?</h3>
+
+        <p class="text-sm small-muted mb-4">
+          Es la pedagogía espiritual de Schoenstatt: ofrecer libremente actos de amor y sacrificio 
+          para que la Mater actúe como educadora y forme corazones nuevos.
+        </p>
+
+        <ul class="list-disc ml-6 text-gray-700 space-y-1">
+          <li>Orar por alguien que lo necesita</li>
+          <li>Actuar con bondad en momentos difíciles</li>
+          <li>Renunciar a algo por amor</li>
+          <li>Ofrecer el trabajo, estudio o esfuerzos del día</li>
+          <li>Perdonar a alguien que te hirió</li>
+        </ul>
+      </div>
+
+
+      <!-- Modal para ofrecer -->
+      <div id="offerModal" style="display:none; position:fixed; inset:0; align-items:center; justify-content:center; z-index:9999; background:rgba(2,6,23,0.45);">
+        <div style="background:white; max-width:720px; width:92%; padding:18px; border-radius:12px;">
+          <h3 style="margin:0 0 8px">Ofrecer Capital de Gracia</h3>
+          <p style="color:var(--muted); margin:0 0 12px;">Describe tu intención (opcional)</p>
+          <textarea id="capitalNote" rows="5"
+            style="width:100%; padding:10px; border-radius:8px; border:1px solid #e6e6e6;"></textarea>
+
+          <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:12px;">
+            <button id="submitCapital" class="btn">Ofrecer</button>
+            <button id="cancelCapital" class="btn-secondary">Cancelar</button>
+          </div>
+        </div>
+      </div>
+
+    </section>
+  `;
+}
+
+
+/* RENDER principal */
+function render(){
+  const page = pageFromUrl();
+  const target = document.getElementById('content');
+  if (page === 'home' || page === 'inicio') target.innerHTML = renderHome();
+  else if (page === 'eventos') target.innerHTML = renderEventosPage();
+  else if (page === 'juventud-masculina') target.innerHTML = renderJuventudMasculina();
+  else if (page === 'juventud-femenina') target.innerHTML = renderJuventudFemenina();
+  else if (page === 'capitales-de-gracia' || page === 'capitales') target.innerHTML = renderCapitales();
+  else target.innerHTML = '<p>Sección no encontrada.</p>';
+
+  wireUpAfterRender();
+}
+render();
+
+/* FORM CONTACT */
+document.addEventListener('submit', function(e){
+  if (e.target && e.target.id === 'contactForm') {
+    e.preventDefault();
+    const name = (document.getElementById('name')||{}).value || '';
+    const phone = (document.getElementById('phone')||{}).value || '';
+    const message = (document.getElementById('message')||{}).value || '';
+    if (!name.trim() || !phone.trim() || !message.trim()) { alert('Por favor completa todos los campos.'); return; }
+    const payload = { name: name.trim(), phone: phone.trim(), message: message.trim(), ts: Date.now() };
+    if (!db) { alert('Error: base de datos no disponible.'); return; }
+    db.ref('contacts').push(payload)
+      .then(()=> {
+        const msg = document.getElementById('formMsg');
+        if (msg) msg.classList.remove('hidden');
+        setTimeout(()=> { if (msg) msg.classList.add('hidden'); e.target.reset(); }, 1800);
+      })
+      .catch(err => { console.error('Error guardar contacto', err); alert('Error al enviar.'); });
+  }
+});
+
+/* CAPITALS logic y utilidades */
+function wireUpAfterRender(){
+  const menuToggle = document.getElementById('menuToggle');
+  const mobileMenu = document.getElementById('mobileMenu');
+  if (menuToggle && mobileMenu) menuToggle.addEventListener('click', ()=> mobileMenu.classList.toggle('hidden'));
+
+  const quickBtn = document.getElementById('quickOffer');
+  const openModalBtn = document.getElementById('openOfferModal');
+  const modal = document.getElementById('offerModal');
+  const cancelBtn = document.getElementById('cancelCapital');
+  const submitBtn = document.getElementById('submitCapital');
+  const noteEl = document.getElementById('capitalNote');
+  const globalCountEl = document.getElementById('globalCount');
+
+  const countRef = db ? db.ref('global/count') : null;
+  const notesRef = db ? db.ref('global/notes') : null;
+
+  if (countRef && globalCountEl) {
+    countRef.on('value', snap => { globalCountEl.textContent = snap.val() ?? 0; });
+  }
+
+  function increment(delta = 1){
+    if (!countRef) {
+      if (globalCountEl) {
+        const cur = parseInt(globalCountEl.textContent || '0', 10) || 0;
+        globalCountEl.textContent = cur + delta;
+      }
+      return;
+    }
+    countRef.transaction(cur => cur === null ? delta : cur + delta, (err, committed, snap) => {
+      if (err) console.error('transaction error', err);
+    });
+  }
+
+  if (quickBtn) quickBtn.addEventListener('click', () => increment(1));
+  if (openModalBtn && modal) openModalBtn.addEventListener('click', () => { modal.style.display = 'flex'; if (noteEl) noteEl.focus(); });
+  if (cancelBtn && modal) cancelBtn.addEventListener('click', () => { modal.style.display = 'none'; if (noteEl) noteEl.value = ''; });
+
+  if (submitBtn) submitBtn.addEventListener('click', () => {
+    const text = (noteEl && noteEl.value) ? noteEl.value.trim() : '';
+    increment(1);
+    if (text && notesRef) notesRef.push({ note: text.slice(0,600), ts: Date.now() }).catch(e=>console.error(e));
+    if (modal) modal.style.display = 'none';
+    if (noteEl) noteEl.value = '';
+  });
+
+  if (modal) modal.addEventListener('click', (e) => { if (e.target === modal) modal.style.display = 'none'; });
+}
+
+window.addEventListener('popstate', function(){ render(); });
+
+document.addEventListener('click', function(e){
+  const a = e.target.closest && e.target.closest('a');
+  if (!a) return;
+  const href = a.getAttribute('href') || '';
+  if (href.startsWith('?page=')) {
+    e.preventDefault();
+    history.pushState(null, '', href);
+    render();
+  }
+});
+</script>
+</body>
+</html>
